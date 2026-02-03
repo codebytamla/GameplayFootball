@@ -27,3 +27,26 @@ jobs:
 
       - name: Build
         run: cmake --build build -j$(nproc)
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew install sdl2 sdl2_image sdl2_ttf sdl2_gfx boost openal-soft sqlite
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build -j$(sysctl -n hw.ncpu)
+
+      - name: Upload macOS binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: gameplayfootball-macos
+          path: |
+            build/gameplayfootball
+            data/

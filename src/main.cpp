@@ -32,6 +32,7 @@
 
 #include "utils/orbitcamera.hpp"
 
+#include "SDL2/SDL.h"
 #include "SDL2/SDL_ttf.h"
 
 #if defined(WIN32) && defined(__MINGW32__)
@@ -269,43 +270,25 @@ class ThreadHudThread : public Thread {
 };
 
 
-int main(int argc, const char** argv) {
+// Variables shared between main thread and init thread
+static TTF_Font *defaultFont = 0;
+static TTF_Font *defaultOutlineFont = 0;
+static ThreadHudThread *threadHudThread = 0;
+static int timeStep_ms = 10;
 
-  config = new Properties();
-  if (argc > 1) configFile = argv[1];
-  config->LoadFile(configFile.c_str());
+// Background init thread: runs all initialization that needs the renderer
+// to be alive (audio, scenes, geometry loading, controllers, scheduler).
+// The renderer is already running on the main thread when this executes.
+static void GameInitThread() {
 
-  Initialize(*config);
+  // Wait for SDL to be initialized by the renderer on the main thread.
+  // The renderer calls SDL_Init(SDL_INIT_VIDEO) as the very first thing
+  // in its loop. We need this before SDL_NumJoysticks() and other SDL calls.
+  while (!SDL_WasInit(SDL_INIT_VIDEO)) {
+    boost::this_thread::sleep(boost::posix_time::milliseconds(5));
+  }
 
-  srand(time(NULL));
-  rand(); // mingw32? buggy compiler? first value seems bogus
-  randomseed(); // for the boost random
-  fastrandomseed();
-
-  int timeStep_ms = config->GetInt("physics_frametime_ms", 10);
-
-
-  // database
-
-  db = new Database();
-  bool dbSuccess = db->Load("databases/default/database.sqlite");
-  if (!dbSuccess) Log(e_FatalError, "main", "()", "Could not open database");
-
-
-  // initialize systems
-
-  SystemManager *systemManager = SystemManager::GetInstancePtr();
-
-  graphicsSystem = new GraphicsSystem();
-  bool returnvalue = systemManager->RegisterSystem("GraphicsSystem", graphicsSystem);
-  if (!returnvalue) Log(e_FatalError, "football", "main", "Could not register GraphicsSystem");
-
-  audioSystem = new AudioSystem();
-  returnvalue = systemManager->RegisterSystem("AudioSystem", audioSystem);
-  if (!returnvalue) Log(e_FatalError, "football", "main", "Could not register AudioSystem");
-
-  // todo: let systemmanager init systems?
-  graphicsSystem->Initialize(*config);
+  // initialize audio system
   audioSystem->Initialize(*config);
 
 
@@ -320,16 +303,15 @@ int main(int argc, const char** argv) {
   if (SuperDebug()) InitDebugImage();
   if (GetDebugMode() == e_DebugMode_AI) InitDebugOverlay();
 
-  ThreadHudThread *threadHudThread = 0;
   if (!IsReleaseVersion() && 1 == 2) {
     threadHudThread = new ThreadHudThread();
     threadHudThread->Run();
-  } else {
-    threadHudThread = 0;
   }
 
 
-  // debug pilons
+  // debug pilons — these send CreateTexture/CreateVertexBuffer messages
+  // to the renderer and Wait() for responses. The renderer is now alive
+  // on the main thread, so these calls succeed.
 
   boost::intrusive_ptr < Resource<GeometryData> > geometry = ResourceManagerPool::GetInstance().GetManager<GeometryData>(e_ResourceType_GeometryData)->Fetch("media/objects/helpers/green.ase", true);
   greenPilon = static_pointer_cast<Geometry>(ObjectFactory::GetInstance().CreateObject("greenPilon", e_ObjectType_Geometry));
@@ -337,7 +319,6 @@ int main(int argc, const char** argv) {
   greenPilon->SetGeometryData(geometry);
   greenPilon->SetLocalMode(e_LocalMode_Absolute);
   greenPilon->SetPosition(Vector3(0, 0, -10));
-  //greenPilon->Disable();
 
   geometry = ResourceManagerPool::GetInstance().GetManager<GeometryData>(e_ResourceType_GeometryData)->Fetch("media/objects/helpers/blue.ase", true);
   bluePilon = static_pointer_cast<Geometry>(ObjectFactory::GetInstance().CreateObject("bluePilon", e_ObjectType_Geometry));
@@ -345,7 +326,6 @@ int main(int argc, const char** argv) {
   bluePilon->SetGeometryData(geometry);
   bluePilon->SetLocalMode(e_LocalMode_Absolute);
   bluePilon->SetPosition(Vector3(0, 0, -10));
-  //bluePilon->Disable();
 
   geometry = ResourceManagerPool::GetInstance().GetManager<GeometryData>(e_ResourceType_GeometryData)->Fetch("media/objects/helpers/yellow.ase", true);
   yellowPilon = static_pointer_cast<Geometry>(ObjectFactory::GetInstance().CreateObject("yellowPilon", e_ObjectType_Geometry));
@@ -353,7 +333,6 @@ int main(int argc, const char** argv) {
   yellowPilon->SetGeometryData(geometry);
   yellowPilon->SetLocalMode(e_LocalMode_Absolute);
   yellowPilon->SetPosition(Vector3(0, 0, -10));
-  //yellowPilon->Disable();
 
   geometry = ResourceManagerPool::GetInstance().GetManager<GeometryData>(e_ResourceType_GeometryData)->Fetch("media/objects/helpers/red.ase", true);
   redPilon = static_pointer_cast<Geometry>(ObjectFactory::GetInstance().CreateObject("redPilon", e_ObjectType_Geometry));
@@ -361,7 +340,6 @@ int main(int argc, const char** argv) {
   redPilon->SetGeometryData(geometry);
   redPilon->SetLocalMode(e_LocalMode_Absolute);
   redPilon->SetPosition(Vector3(0, 0, -10));
-  //redPilon->Disable();
 
   geometry = ResourceManagerPool::GetInstance().GetManager<GeometryData>(e_ResourceType_GeometryData)->Fetch("media/objects/helpers/smalldebugcircle.ase", true);
   smallDebugCircle1 = static_pointer_cast<Geometry>(ObjectFactory::GetInstance().CreateObject("smallDebugCircle1", e_ObjectType_Geometry));
@@ -369,7 +347,6 @@ int main(int argc, const char** argv) {
   smallDebugCircle1->SetGeometryData(geometry);
   smallDebugCircle1->SetLocalMode(e_LocalMode_Absolute);
   smallDebugCircle1->SetPosition(Vector3(0, 0, -10));
-//  smallDebugCircle1->Disable();
 
   geometry = ResourceManagerPool::GetInstance().GetManager<GeometryData>(e_ResourceType_GeometryData)->Fetch("media/objects/helpers/smalldebugcircle.ase", true);
   smallDebugCircle2 = static_pointer_cast<Geometry>(ObjectFactory::GetInstance().CreateObject("smallDebugCircle2", e_ObjectType_Geometry));
@@ -377,7 +354,6 @@ int main(int argc, const char** argv) {
   smallDebugCircle2->SetGeometryData(geometry);
   smallDebugCircle2->SetLocalMode(e_LocalMode_Absolute);
   smallDebugCircle2->SetPosition(Vector3(0, 0, -10));
-//  smallDebugCircle2->Disable();
 
   geometry = ResourceManagerPool::GetInstance().GetManager<GeometryData>(e_ResourceType_GeometryData)->Fetch("media/objects/helpers/largedebugcircle.ase", true);
   largeDebugCircle = static_pointer_cast<Geometry>(ObjectFactory::GetInstance().CreateObject("largeDebugCircle", e_ObjectType_Geometry));
@@ -385,7 +361,6 @@ int main(int argc, const char** argv) {
   largeDebugCircle->SetGeometryData(geometry);
   largeDebugCircle->SetLocalMode(e_LocalMode_Absolute);
   largeDebugCircle->SetPosition(Vector3(0, 0, -10));
-//  largeDebugCircle->Disable();
 
   geometry.reset();
 
@@ -402,16 +377,12 @@ int main(int argc, const char** argv) {
 
   // sequences
 
-  boost::mutex graphicsGameMutex; // todo: this mutex seems necessary for visual fluency, doesn't this imply that i'm setting positional stuff during something else than gametask put? (or reading during something else than graphics get)
-
   gameTask = boost::shared_ptr<GameTask>(new GameTask());
 
-  // TTF_Font *defaultFont = TTF_OpenFont("media/fonts/archivonarrow/ArchivoNarrow-Regular.ttf", 28);
-  // TTF_Font *defaultOutlineFont = TTF_OpenFont("media/fonts/archivonarrow/ArchivoNarrow-Regular.ttf", 28);
   std::string fontfilename = config->Get("font_filename", "media/fonts/alegreya/AlegreyaSansSC-ExtraBold.ttf");
-  TTF_Font *defaultFont = TTF_OpenFont(fontfilename.c_str(), 32);
+  defaultFont = TTF_OpenFont(fontfilename.c_str(), 32);
   if (!defaultFont) Log(e_FatalError, "football", "main", "Could not load font " + fontfilename);
-  TTF_Font *defaultOutlineFont = TTF_OpenFont(fontfilename.c_str(), 32);
+  defaultOutlineFont = TTF_OpenFont(fontfilename.c_str(), 32);
   TTF_SetFontOutline(defaultOutlineFont, 2);
   menuTask = boost::shared_ptr<MenuTask>(new MenuTask(5.0f / 4.0f, 0, defaultFont, defaultOutlineFont));
   if (controllers.size() > 1) menuTask->SetEventJoyButtons(static_cast<HIDGamepad*>(controllers.at(1))->GetControllerMapping(e_ControllerButton_A), static_cast<HIDGamepad*>(controllers.at(1))->GetControllerMapping(e_ControllerButton_B));
@@ -419,34 +390,21 @@ int main(int argc, const char** argv) {
 
   gameSequence = boost::shared_ptr<TaskSequence>(new TaskSequence("game", timeStep_ms, false));
 
-  // note: the whole locking stuff is now happening from within some of the code, iirc, 't is all very ugly and unclear. sorry
-
-  //gameSequence->AddLockEntry(graphicsGameMutex, e_LockAction_Lock);   // ---------- lock -----
-
   gameSequence->AddUserTaskEntry(menuTask, e_TaskPhase_Get);
   gameSequence->AddUserTaskEntry(menuTask, e_TaskPhase_Process);
   gameSequence->AddUserTaskEntry(menuTask, e_TaskPhase_Put);
 
-  //gameSequence->AddLockEntry(graphicsGameMutex, e_LockAction_Unlock); // ---------- unlock ---
-
   gameSequence->AddUserTaskEntry(gameTask, e_TaskPhase_Get);
   gameSequence->AddUserTaskEntry(gameTask, e_TaskPhase_Process);
 
-//  gameSequence->AddLockEntry(graphicsGameMutex, e_LockAction_Unlock); // ---------- unlock ---
-
   GetScheduler()->RegisterTaskSequence(gameSequence);
-
 
 
   graphicsSequence = boost::shared_ptr<TaskSequence>(new TaskSequence("graphics", config->GetInt("graphics3d_frametime_ms", 0), true));
 
   graphicsSequence->AddUserTaskEntry(gameTask, e_TaskPhase_Put);
 
-  //graphicsSequence->AddLockEntry(graphicsGameMutex, e_LockAction_Lock);   // ---------- lock -----
-
   graphicsSequence->AddSystemTaskEntry(graphicsSystem, e_TaskPhase_Get);
-
-  //graphicsSequence->AddLockEntry(graphicsGameMutex, e_LockAction_Unlock); // ---------- unlock ---
 
   graphicsSequence->AddSystemTaskEntry(graphicsSystem, e_TaskPhase_Process);
   graphicsSequence->AddSystemTaskEntry(graphicsSystem, e_TaskPhase_Put);
@@ -454,17 +412,63 @@ int main(int argc, const char** argv) {
   GetScheduler()->RegisterTaskSequence(graphicsSequence);
 
 
-  // fire!
-  // Run the scheduler on a background thread so the main thread is free
-  // for the SDL/OpenGL renderer loop (required on macOS, good practice everywhere).
+  // fire! Start the scheduler on a background thread.
   RunSchedulerInBackground();
+}
+
+
+int main(int argc, const char** argv) {
+
+  config = new Properties();
+  if (argc > 1) configFile = argv[1];
+  config->LoadFile(configFile.c_str());
+
+  Initialize(*config);
+
+  srand(time(NULL));
+  rand(); // mingw32? buggy compiler? first value seems bogus
+  randomseed(); // for the boost random
+  fastrandomseed();
+
+  timeStep_ms = config->GetInt("physics_frametime_ms", 10);
+
+
+  // database
+
+  db = new Database();
+  bool dbSuccess = db->Load("databases/default/database.sqlite");
+  if (!dbSuccess) Log(e_FatalError, "main", "()", "Could not open database");
+
+
+  // initialize graphics system (creates renderer + task, queues CreateContext message)
+  // Audio and everything else moves to the init thread.
+
+  SystemManager *systemManager = SystemManager::GetInstancePtr();
+
+  graphicsSystem = new GraphicsSystem();
+  bool returnvalue = systemManager->RegisterSystem("GraphicsSystem", graphicsSystem);
+  if (!returnvalue) Log(e_FatalError, "football", "main", "Could not register GraphicsSystem");
+
+  audioSystem = new AudioSystem();
+  returnvalue = systemManager->RegisterSystem("AudioSystem", audioSystem);
+  if (!returnvalue) Log(e_FatalError, "football", "main", "Could not register AudioSystem");
+
+  graphicsSystem->Initialize(*config);
+
+  // Spawn background thread for remaining init (audio, scenes, geometry, scheduler).
+  // This must happen AFTER graphicsSystem->Initialize() but BEFORE the renderer starts,
+  // so the init thread can send messages to the renderer as soon as it begins processing.
+  boost::thread initThread(&GameInitThread);
 
   // Run the renderer on the main thread — this blocks until shutdown.
   // macOS requires all SDL/OpenGL work on the main thread (Cocoa/AppKit requirement).
+  // The renderer processes the queued CreateContext message first, then handles
+  // CreateTexture/CreateVertexBuffer messages from the init thread's geometry loading.
   graphicsSystem->StartRendererOnMainThread();
 
   // Renderer has exited, now wait for the scheduler to finish
   WaitForScheduler();
+  initThread.join();  // should already be done by now
 
 
   // exit
@@ -509,8 +513,8 @@ int main(int argc, const char** argv) {
   }
   controllers.clear();
 
-  TTF_CloseFont(defaultFont); // todo: better timed closefont?
-  TTF_CloseFont(defaultOutlineFont); // todo: better timed closefont?
+  TTF_CloseFont(defaultFont);
+  TTF_CloseFont(defaultOutlineFont);
 
   delete db;
   delete config;

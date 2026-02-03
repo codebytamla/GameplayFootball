@@ -790,7 +790,9 @@ struct GLfunctions {
     }
 
     void OpenGLRenderer3D::SetColor(const Vector3 &color, float alpha) {
-      mapping.glColor4f(color.coords[0], color.coords[1], color.coords[2], alpha);
+      (void)color;
+      (void)alpha;
+      // Legacy fixed-function color state no longer used in the core profile.
     }
 
     void OpenGLRenderer3D::SetColorMask(bool r, bool g, bool b, bool alpha) {
@@ -1678,8 +1680,8 @@ struct GLfunctions {
   }
 
   void OpenGLRenderer3D::SetClientTextureUnit(int textureUnit) {
-    //assert(glClientActiveTexture);
-    mapping.glClientActiveTexture(GL_TEXTURE0 + (GLuint)textureUnit);
+    (void)textureUnit;
+    // Client texture unit selection is not needed with shader-based texcoord handling.
   }
 
   void OpenGLRenderer3D::SetMaxAnisotropy() {
@@ -1784,11 +1786,12 @@ struct GLfunctions {
   }
 
   void OpenGLRenderer3D::PushAttribute(int attr) {
-    mapping.glPushAttrib((GLbitfield)attr);
+    (void)attr;
+    // Attribute stacks are not available in Core Profile; ignore.
   }
 
   void OpenGLRenderer3D::PopAttribute() {
-    mapping.glPopAttrib();
+    // No-op in the Core Profile.
   }
 
   void OpenGLRenderer3D::SetViewport(int x, int y, int width, int height) {

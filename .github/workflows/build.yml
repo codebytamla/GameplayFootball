@@ -15,16 +15,32 @@ jobs:
       - name: Install dependencies
         run: |
           brew install sdl2 sdl2_image sdl2_ttf sdl2_gfx boost openal-soft sqlite
+          brew link boost
+
+      - name: Debug Homebrew paths
+        run: |
+          echo "Homebrew prefix: $(brew --prefix)"
+          echo "Boost prefix: $(brew --prefix boost)"
+          echo "--- Boost include dir contents ---"
+          ls $(brew --prefix boost)/include/ 2>/dev/null || echo "No include dir at boost prefix"
+          ls $(brew --prefix)/include/boost/ 2>/dev/null | head -3 || echo "No boost in homebrew include"
+          echo "--- shared_ptr.hpp check ---"
+          find $(brew --prefix boost) -name "shared_ptr.hpp" 2>/dev/null | head -3
+          find $(brew --prefix) -path "*/boost/shared_ptr.hpp" 2>/dev/null | head -3
 
       - name: Configure
         run: |
           export HOMEBREW_PREFIX=$(brew --prefix)
+          export BOOST_PREFIX=$(brew --prefix boost)
           export OPENAL_PREFIX=$(brew --prefix openal-soft)
           cmake -B build -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="$HOMEBREW_PREFIX" \
+            -DBOOST_ROOT=$BOOST_PREFIX \
+            -DBoost_INCLUDE_DIR=$BOOST_PREFIX/include \
             -DSDL2_DIR=$(brew --prefix sdl2)/lib/cmake/SDL2 \
             -DOPENAL_INCLUDE_DIR=$OPENAL_PREFIX/include \
-            -DOPENAL_LIBRARY=$OPENAL_PREFIX/lib/libopenal.dylib
+            -DOPENAL_LIBRARY=$OPENAL_PREFIX/lib/libopenal.dylib \
+            -DCMAKE_CXX_FLAGS="-I$BOOST_PREFIX/include -I$HOMEBREW_PREFIX/include"
 
       - name: Build
         run: cmake --build build -j$(sysctl -n hw.ncpu)

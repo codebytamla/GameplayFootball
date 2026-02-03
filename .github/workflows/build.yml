@@ -38,7 +38,12 @@ jobs:
           brew install sdl2 sdl2_image sdl2_ttf sdl2_gfx boost openal-soft sqlite
 
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DBOOST_ROOT=$(brew --prefix boost) \
+            -DSDL2_DIR=$(brew --prefix sdl2)/lib/cmake/SDL2 \
+            -DOPENAL_INCLUDE_DIR=$(brew --prefix openal-soft)/include \
+            -DOPENAL_LIBRARY=$(brew --prefix openal-soft)/lib/libopenal.dylib
 
       - name: Build
         run: cmake --build build -j$(sysctl -n hw.ncpu)

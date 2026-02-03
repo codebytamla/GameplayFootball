@@ -17,17 +17,6 @@ jobs:
           brew install sdl2 sdl2_image sdl2_ttf sdl2_gfx boost openal-soft sqlite
           brew link boost
 
-      - name: Debug Homebrew paths
-        run: |
-          echo "Homebrew prefix: $(brew --prefix)"
-          echo "Boost prefix: $(brew --prefix boost)"
-          echo "--- Boost include dir contents ---"
-          ls $(brew --prefix boost)/include/ 2>/dev/null || echo "No include dir at boost prefix"
-          ls $(brew --prefix)/include/boost/ 2>/dev/null | head -3 || echo "No boost in homebrew include"
-          echo "--- shared_ptr.hpp check ---"
-          find $(brew --prefix boost) -name "shared_ptr.hpp" 2>/dev/null | head -3
-          find $(brew --prefix) -path "*/boost/shared_ptr.hpp" 2>/dev/null | head -3
-
       - name: Configure
         run: |
           export HOMEBREW_PREFIX=$(brew --prefix)
@@ -45,10 +34,16 @@ jobs:
       - name: Build
         run: cmake --build build -j$(sysctl -n hw.ncpu)
 
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp build/gameplayfootball dist/
+          cp data/football.config dist/
+          cp -r data/databases dist/
+          cp -r data/media dist/
+
       - name: Upload macOS binary
         uses: actions/upload-artifact@v4
         with:
           name: gameplayfootball-macos
-          path: |
-            build/gameplayfootball
-            data/
+          path: dist/

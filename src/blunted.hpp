@@ -15,8 +15,14 @@ namespace blunted {
   /// load managers, systems, scheduler and scene
   void Initialize(Properties &config);
 
-  /// run the scheduler
+  /// run the scheduler (blocks main thread — legacy, used on Linux)
   void Run();
+
+  /// run the scheduler on a background thread (main thread stays free for renderer)
+  void RunSchedulerInBackground();
+
+  /// wait for the background scheduler thread to finish, then clean up
+  void WaitForScheduler();
 
   Scheduler *GetScheduler();
 

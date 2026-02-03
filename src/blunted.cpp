@@ -130,6 +130,30 @@ namespace blunted {
 
   }
 
+  // Scheduler thread function — runs the scheduler on a background thread
+  // so the main thread is free for the SDL/OpenGL renderer (macOS requirement).
+  static void SchedulerThreadFunc() {
+    scheduler->Run();
+  }
+
+  boost::thread schedulerThread;
+
+  void RunSchedulerInBackground() {
+    printf("RUN (scheduler on background thread)\n");
+    schedulerThread = boost::thread(&SchedulerThreadFunc);
+  }
+
+  void WaitForScheduler() {
+    schedulerThread.join();
+
+    // stop signaling systems
+    // also clears links to user tasks
+    scheduler->Exit();
+    delete scheduler;
+    scheduler = 0;
+  }
+
+  // Legacy Run() — kept for backward compatibility (e.g. Linux where main thread doesn't matter)
   void Run() {
     printf("RUN\n");
 

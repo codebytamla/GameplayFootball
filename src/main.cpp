@@ -455,8 +455,16 @@ int main(int argc, const char** argv) {
 
 
   // fire!
+  // Run the scheduler on a background thread so the main thread is free
+  // for the SDL/OpenGL renderer loop (required on macOS, good practice everywhere).
+  RunSchedulerInBackground();
 
-  Run();
+  // Run the renderer on the main thread — this blocks until shutdown.
+  // macOS requires all SDL/OpenGL work on the main thread (Cocoa/AppKit requirement).
+  graphicsSystem->StartRendererOnMainThread();
+
+  // Renderer has exited, now wait for the scheduler to finish
+  WaitForScheduler();
 
 
   // exit

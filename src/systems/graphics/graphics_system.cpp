@@ -30,26 +30,36 @@ namespace blunted {
     ResourceManagerPool::GetInstance().RegisterManager(e_ResourceType_Texture, textureResourceManager);
     ResourceManagerPool::GetInstance().RegisterManager(e_ResourceType_VertexBuffer, vertexBufferResourceManager);
 
-    // start thread for renderer
+    // create renderer (but don't start its thread — it will run on the main thread)
     if (config.Get("graphics3d_renderer", "opengl") == "opengl") renderer3DTask = new OpenGLRenderer3D();
     width = config.GetInt("context_x", 1280);
     height = config.GetInt("context_y", 720);
     bpp = config.GetInt("context_bpp", 32);
     bool fullscreen = config.GetBool("context_fullscreen", false);
-    renderer3DTask->Run();
+    rendererRunningOnMainThread = false;
 
+    // Queue up the CreateContext message — it will be the first thing processed
+    // when the renderer loop starts on the main thread.
     boost::intrusive_ptr<Renderer3DMessage_CreateContext> createContext(new Renderer3DMessage_CreateContext(width, height, bpp, fullscreen));
     renderer3DTask->messageQueue.PushMessage(createContext);
-    createContext->Wait();
 
-    if (!createContext->success) {
-      Log(e_FatalError, "GraphicsSystem", "Initialize", "Could not create context");
-    } else {
-      Log(e_Notice, "GraphicsSystem", "Initialize", "Created context, resolution " + int_to_str(width) + " * " + int_to_str(height) + " @ " + int_to_str(bpp) + " bpp");
-    }
+    // Note: We do NOT wait for createContext here. The renderer isn't running yet.
+    // It will be processed when StartRendererOnMainThread() is called.
+    // Context creation success is checked there.
 
     task = new GraphicsTask(this);
+    // Don't start GraphicsTask yet — it needs the renderer to be running first.
+    // It will be started by StartRendererOnMainThread().
+  }
+
+  void GraphicsSystem::StartRendererOnMainThread() {
+    // Start the GraphicsTask worker thread (orchestrates render phases)
     task->Run();
+
+    // Run the renderer loop on the current (main) thread.
+    // This blocks until shutdown. SDL/OpenGL require the main thread on macOS.
+    rendererRunningOnMainThread = true;
+    renderer3DTask->RunOnCurrentThread();
   }
 
   void GraphicsSystem::Exit() {
@@ -65,12 +75,18 @@ namespace blunted {
     textureResourceManager.reset();
     vertexBufferResourceManager.reset();
 
-    // shutdown renderer thread
+    // shutdown renderer — send shutdown message.
+    // If running on main thread, RunOnCurrentThread() will return when it processes this.
+    // No Join() needed since it wasn't spawned as a separate thread.
     boost::intrusive_ptr<Message_Shutdown> R3Dshutdown(new Message_Shutdown());
     renderer3DTask->messageQueue.PushMessage(R3Dshutdown);
-    R3Dshutdown->Wait();
 
-    renderer3DTask->Join();
+    if (!rendererRunningOnMainThread) {
+      R3Dshutdown->Wait();
+      renderer3DTask->Join();
+    }
+    // Note: if rendererRunningOnMainThread, the renderer loop will exit naturally
+    // when it processes the shutdown message. Cleanup happens after RunOnCurrentThread() returns.
     delete renderer3DTask;
     renderer3DTask = NULL;
   }

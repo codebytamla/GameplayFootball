@@ -69,6 +69,12 @@ namespace blunted {
         thread = boost::thread(boost::ref( *this ));
       }
 
+      // Run the thread's main loop on the calling thread (no new thread spawned).
+      // Used for SDL/OpenGL which must run on the main thread (macOS requirement).
+      void RunOnCurrentThread() {
+        (*this)();
+      }
+
       void Join() {
         thread.join();
       }

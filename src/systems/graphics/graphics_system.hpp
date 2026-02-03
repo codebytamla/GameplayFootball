@@ -33,6 +33,11 @@ namespace blunted {
       virtual void Initialize(const Properties &config);
       virtual void Exit();
 
+      /// Start the renderer loop on the calling (main) thread. Blocks until shutdown.
+      /// Must be called from the main thread after all other setup is complete.
+      /// macOS requires SDL/OpenGL to run on the main thread.
+      void StartRendererOnMainThread();
+
       e_SystemType GetSystemType() const;
 
       virtual ISystemScene *CreateSystemScene(boost::shared_ptr<IScene> scene);
@@ -69,6 +74,7 @@ namespace blunted {
       MessageQueue<Overlay2DQueueEntry> overlay2DQueue;
 
       int width, height, bpp;
+      bool rendererRunningOnMainThread;
 
   };
 

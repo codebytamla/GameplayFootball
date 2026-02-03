@@ -34,13 +34,13 @@ FIND_PACKAGE(SDL2 REQUIRED)
 include_directories(${SDL2_INCLUDE_DIR})
 
 FIND_PACKAGE(SDL2_image REQUIRED)
-include_directories(${SDL2_IMAGE_DIRS})
+include_directories(${SDL2_IMAGE_INCLUDE_DIRS})
 
 FIND_PACKAGE(SDL2_ttf REQUIRED)
-include_directories(${SDL2_TTF_DIRS})
+include_directories(${SDL2_TTF_INCLUDE_DIRS})
 
 FIND_PACKAGE(SDL2_gfx REQUIRED)
-include_directories(${SDL2_GFX_DIRS})
+include_directories(${SDL2_GFX_INCLUDE_DIRS})
 
 if(POLICY CMP0167)
    cmake_policy(SET CMP0167 NEW)

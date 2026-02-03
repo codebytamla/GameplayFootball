@@ -18,16 +18,13 @@ jobs:
 
       - name: Configure
         run: |
-          export BOOST_PREFIX=$(brew --prefix boost)
+          export HOMEBREW_PREFIX=$(brew --prefix)
           export OPENAL_PREFIX=$(brew --prefix openal-soft)
           cmake -B build -DCMAKE_BUILD_TYPE=Release \
-            -DBOOST_ROOT=$BOOST_PREFIX \
-            -DBoost_INCLUDE_DIR=$BOOST_PREFIX/include \
-            -DBoost_LIBRARY_DIRS=$BOOST_PREFIX/lib \
+            -DCMAKE_PREFIX_PATH="$HOMEBREW_PREFIX" \
             -DSDL2_DIR=$(brew --prefix sdl2)/lib/cmake/SDL2 \
             -DOPENAL_INCLUDE_DIR=$OPENAL_PREFIX/include \
-            -DOPENAL_LIBRARY=$OPENAL_PREFIX/lib/libopenal.dylib \
-            -DCMAKE_CXX_FLAGS="-I$BOOST_PREFIX/include"
+            -DOPENAL_LIBRARY=$OPENAL_PREFIX/lib/libopenal.dylib
 
       - name: Build
         run: cmake --build build -j$(sysctl -n hw.ncpu)
